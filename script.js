@@ -175,3 +175,50 @@ if (search) {
     if (event.key === 'Escape' && document.activeElement === search) { search.value = ''; filterCards(); search.blur(); }
   });
 }
+// Pull Ameer’s latest public repositories at page load; cache briefly to avoid needless requests.
+const repoGrid = document.getElementById('repo-grid');
+const repoStatus = document.getElementById('repo-status');
+if (repoGrid && repoStatus) {
+  const cacheKey = 'ameer-public-repositories-v1';
+  const renderRepositories = repositories => {
+    repoGrid.replaceChildren();
+    const sorted = [...repositories].sort((a,b) => new Date(b.pushed_at || b.updated_at) - new Date(a.pushed_at || a.updated_at));
+    if (!sorted.length) {
+      const empty = document.createElement('p'); empty.className = 'repo-empty';
+      empty.textContent = 'No public repositories to show yet. New public projects will appear here automatically.';
+      repoGrid.append(empty); return;
+    }
+    sorted.forEach((repo,index) => {
+      const card = document.createElement('article'); card.className = 'repo-card'; card.style.animationDelay = `${Math.min(index * 70, 490)}ms`;
+      const head = document.createElement('div'); head.className = 'repo-card-head';
+      const title = document.createElement('h3'); const repoLink = document.createElement('a'); repoLink.href = repo.html_url; repoLink.target = '_blank'; repoLink.rel = 'noopener noreferrer'; repoLink.textContent = repo.name; title.append(repoLink);
+      const visibility = document.createElement('span'); visibility.className = 'repo-visibility'; visibility.textContent = repo.fork ? 'FORK' : 'PUBLIC'; head.append(title,visibility);
+      const description = document.createElement('p'); description.textContent = repo.description || 'A project by Ameer. Visit the repository to explore its code.';
+      const footer = document.createElement('div'); footer.className = 'repo-card-footer';
+      if(repo.language){const language=document.createElement('span');language.className='repo-language';const color=document.createElement('i');language.append(color,document.createTextNode(repo.language));footer.append(language);}
+      const date=document.createElement('span');date.className='repo-date';const changed=new Date(repo.pushed_at || repo.updated_at);date.textContent=`Updated ${changed.toLocaleDateString(undefined,{month:'short',year:'numeric'})}`;footer.append(date);
+      const codeLink=document.createElement('a');codeLink.href=repo.html_url;codeLink.target='_blank';codeLink.rel='noopener noreferrer';codeLink.textContent='View repository ↗';footer.append(codeLink);
+      if(repo.homepage){const website=document.createElement('a');website.href=/^https?:\/\//i.test(repo.homepage)?repo.homepage:`https://${repo.homepage}`;website.target='_blank';website.rel='noopener noreferrer';website.textContent='Visit website ↗';footer.append(website);}
+      card.append(head,description,footer);repoGrid.append(card);
+    });
+  };
+  async function loadRepositories(){
+    try {
+      let cached;
+      try { cached=JSON.parse(localStorage.getItem(cacheKey)||'null'); } catch {}
+      if(cached?.at && Date.now()-cached.at<15*60*1000 && Array.isArray(cached.items)){
+        renderRepositories(cached.items);repoStatus.textContent=`${cached.items.length} public ${cached.items.length===1?'repository':'repositories'} · refreshes automatically`;return;
+      }
+      const response=await fetch('https://api.github.com/users/ameer-marwan/repos?type=owner&sort=updated&per_page=100',{headers:{Accept:'application/vnd.github+json'}});
+      if(!response.ok)throw new Error(`GitHub returned ${response.status}`);
+      const repos=await response.json();
+      const owned=repos.filter(repo=>repo.owner?.login?.toLowerCase()==='ameer-marwan'&&!repo.private);
+      renderRepositories(owned);repoStatus.textContent=`${owned.length} public ${owned.length===1?'repository':'repositories'} · refreshed just now`;
+      try{localStorage.setItem(cacheKey,JSON.stringify({at:Date.now(),items:owned}));}catch{}
+    }catch(error){
+      repoStatus.replaceChildren();repoStatus.textContent='Couldn’t load the live repository list right now.';
+      const fallback=document.createElement('p');fallback.className='repo-error';fallback.append(document.createTextNode('Try again later, or '));const link=document.createElement('a');link.href='https://github.com/ameer-marwan?tab=repositories';link.target='_blank';link.rel='noopener noreferrer';link.textContent='browse Ameer’s repositories on GitHub ↗';fallback.append(link);repoGrid.replaceChildren(fallback);
+    }
+  }
+  loadRepositories();
+}
