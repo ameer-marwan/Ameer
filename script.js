@@ -222,3 +222,39 @@ if (repoGrid && repoStatus) {
   }
   loadRepositories();
 }
+// Add a compact live project gallery to the home page using the same repository feed.
+const homeProjectGrid = document.getElementById('home-project-grid');
+if(homeProjectGrid){
+  async function loadHomeProjects(){
+    let repos;
+    try{
+      const cached=JSON.parse(localStorage.getItem('ameer-public-repositories-v1')||'null');
+      if(cached?.items && Array.isArray(cached.items)) repos=cached.items;
+    }catch{}
+    if(!repos){
+      try{
+        const response=await fetch('https://api.github.com/users/ameer-marwan/repos?type=owner&sort=updated&per_page=100',{headers:{Accept:'application/vnd.github+json'}});
+        if(!response.ok)throw new Error('GitHub request failed');
+        repos=(await response.json()).filter(repo=>repo.owner?.login?.toLowerCase()==='ameer-marwan'&&!repo.private);
+        try{localStorage.setItem('ameer-public-repositories-v1',JSON.stringify({at:Date.now(),items:repos}));}catch{}
+      }catch{
+        const message=document.createElement('p');message.className='repo-error';message.textContent='Projects are having trouble loading. Visit Ameer’s GitHub to see the latest.';homeProjectGrid.replaceChildren(message);return;
+      }
+    }
+    repos=[...repos].sort((a,b)=>new Date(b.pushed_at||b.updated_at)-new Date(a.pushed_at||a.updated_at)).slice(0,3);
+    if(!repos.length){const empty=document.createElement('p');empty.className='repo-empty';empty.textContent='New projects will appear here as they are shared on GitHub.';homeProjectGrid.replaceChildren(empty);return;}
+    homeProjectGrid.replaceChildren(...repos.map((repo,index)=>{
+      const card=document.createElement('article');card.className='home-project-card';card.style.animation=`repo-rise .4s ${index*90}ms both`;
+      const cover=document.createElement('div');cover.className='project-cover';cover.setAttribute('aria-hidden','true');
+      const monogram=document.createElement('span');monogram.className='project-monogram';monogram.textContent=(repo.name||'A').trim().charAt(0).toUpperCase();cover.append(monogram);
+      if(repo.language){const lang=document.createElement('span');lang.className='project-lang';lang.textContent=repo.language;cover.append(lang);}
+      const content=document.createElement('div');content.className='project-card-content';const h=document.createElement('h3');const title=document.createElement('a');title.href=repo.html_url;title.target='_blank';title.rel='noopener noreferrer';title.textContent=repo.name;h.append(title);
+      const desc=document.createElement('p');desc.textContent=repo.description||'A project by Ameer. Explore the source and follow along.';
+      const meta=document.createElement('div');meta.className='project-meta';const date=document.createElement('span');date.textContent=`Updated ${new Date(repo.pushed_at||repo.updated_at).toLocaleDateString(undefined,{month:'short',year:'numeric'})}`;meta.append(date);
+      if(repo.homepage){const live=document.createElement('a');live.href=/^https?:\/\//i.test(repo.homepage)?repo.homepage:`https://${repo.homepage}`;live.target='_blank';live.rel='noopener noreferrer';live.textContent='Live site ↗';meta.append(live);}
+      else{const code=document.createElement('a');code.href=repo.html_url;code.target='_blank';code.rel='noopener noreferrer';code.textContent='View code ↗';meta.append(code);}
+      content.append(h,desc,meta);card.append(cover,content);return card;
+    }));
+  }
+  loadHomeProjects();
+}
