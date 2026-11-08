@@ -1,1 +1,1 @@
-# Ameer---a-digital-future
+# Ameer-a digital future
