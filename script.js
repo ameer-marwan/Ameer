@@ -258,3 +258,19 @@ if(homeProjectGrid){
   }
   loadHomeProjects();
 }
+// Show a small public follower count beside the GitHub follow button.
+const followerCount = document.getElementById('github-followers');
+if(followerCount){
+  async function loadFollowerCount(){
+    try{
+      const key='ameer-github-followers-v1';let cached;
+      try{cached=JSON.parse(localStorage.getItem(key)||'null')}catch{}
+      if(cached?.at && Date.now()-cached.at<60*60*1000){followerCount.textContent=`${cached.count} followers`;return;}
+      const response=await fetch('https://api.github.com/users/ameer-marwan',{headers:{Accept:'application/vnd.github+json'}});
+      if(!response.ok)throw new Error('GitHub unavailable');
+      const profile=await response.json();followerCount.textContent=`${profile.followers} followers`;
+      try{localStorage.setItem(key,JSON.stringify({at:Date.now(),count:profile.followers}))}catch{}
+    }catch{followerCount.textContent='follow my work';}
+  }
+  loadFollowerCount();
+}
